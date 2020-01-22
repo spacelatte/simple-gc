@@ -20,14 +20,14 @@ void hexdump(void *ptr, size_t size) {
 int main(int argc, char **argv) {
 	atexit(gc_stats);
 	for(int i=0; i<9999; i++) {
-		gc_alloc(64 + random()%192, (void*) &argc, 0x0);
+		gc_alloc(64 + random()%192, (void*) &argc, (ref_t) { 0x0 });
 		strncpy(
-			gc_alloc(64 + random()%192, NULL, 0xdeadbeef),
+			gc_alloc(64 + random()%192, NULL, (ref_t) { 0xdeadbeef }),
 			str+random()%600,
 			8+random()%50
 		);
 		continue;
 	}
-	gc_collect((void*) &argc, 0xdeadbeef);
+	gc_collect((void*) &argc, (ref_t) { 0xdeadbeef });
 	return 0;
 }
