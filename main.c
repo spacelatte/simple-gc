@@ -17,15 +17,18 @@ void hexdump(void *ptr, size_t size) {
 	return;
 }
 
+unsigned get_random(int min, int max) {
+	return random()%(max-min) + min;
+}
+
 int main(int argc, char **argv) {
 	atexit(gc_stats);
 	for(int i=0; i<9999; i++) {
-		gc_alloc(64 + random()%192, (void*) &argc, (ref_t) { 0x0 });
-		strncpy(
-			gc_alloc(64 + random()%192, NULL, (ref_t) { 0xdeadbeef }),
-			str+random()%600,
-			8+random()%50
-		);
+		int length = get_random(64, 256);
+		char *x = gc_alloc(length+1, (void*) &argc, (ref_t) { 0x0 });
+		char *y = gc_alloc(length+1, NULL, (ref_t) { 0xdeadbeef });
+		char *offset = str + get_random(0, strlen(str) - length);
+		strncpy(random()%2 ? x : y, offset, length);
 		continue;
 	}
 	gc_collect((void*) &argc, (ref_t) { 0xdeadbeef });
