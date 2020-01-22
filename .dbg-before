@@ -1,0 +1,9 @@
+#undisplay
+#settings set target.prefer-dynamic run-target
+target stop-hook add --one-liner "frame variable"
+
+#br s -n function
+#br s -f file.c -l 00
+
+#br s -n gc_collect
+#br s -f gc.c -l 125
