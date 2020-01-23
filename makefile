@@ -1,7 +1,7 @@
 #!/usr/bin/env make -f
 
 MODULES  := list gc
-PROJECT  := mark-n-sweep-gc
+PROJECT  := simple-gc
 LIBRARY  := $(PROJECT).a
 HEADERS  := $(addsuffix .h, $(MODULES))
 SOURCES  := $(addsuffix .c, $(MODULES))
@@ -53,3 +53,6 @@ clean:
 
 headers: $(SOURCES)
 	cproto -deqx -f 2 -O /dev/null $^
+
+watch:
+	watchexec -v -n -c -i '*.a.*' $(MAKE) clean all test

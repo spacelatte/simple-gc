@@ -4,6 +4,7 @@
 #define _LIST_H_
 
 #include <stddef.h>
+#include <stdarg.h>
 
 typedef struct List {
 	struct List *next;

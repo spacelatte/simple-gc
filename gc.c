@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
@@ -9,14 +10,21 @@
 
 list_t *gc_list_root = NULL;
 
-size_t gc_random(void) {
-	return (size_t) random();
+uint64_t gc_random(void) {
+	return (uint64_t) random();
 }
 
-size_t gc_incremental(void) {
-	static size_t count;
+uint64_t gc_incremental(void) {
+	static uint64_t count;
 	count += 1;
 	return count;
+}
+
+int gc_blockcheck(void *ptr, size_t size) {
+	const char test[size];
+	int value = memcmp(ptr, test, size);
+	//fprintf(stderr, "CHK: %d\n", value);
+	return value;
 }
 
 alloc_t* gc_make(size_t size, void *caller, ref_t ref) {
@@ -25,7 +33,7 @@ alloc_t* gc_make(size_t size, void *caller, ref_t ref) {
 	alloc->size    = 0;
 	alloc->ptr     = calloc(1, size);
 	alloc->caller  = caller;
-	alloc->ref.ptr = NULL; //gc_incremental();
+	alloc->ref     = (ref_t) { 0x00 };
 	alloc->orphan  = 0x00;
 	if(alloc->ptr) {
 		alloc->size = size;
@@ -88,35 +96,46 @@ void* gc_alloc(size_t size, void *caller, ref_t ref) {
 #pragma GCC diagnostic ignored "-Wcompare-distinct-pointer-types"
 #pragma GCC diagnostic ignored "-Wincompatible-function-pointer-types"
 
-int gc_collect_caller_helper(alloc_t *alloc, va_list args) {
+int gc_mark_caller_helper(alloc_t *alloc, va_list args) {
 	if(!alloc || !args) return 1;
 	void *caller = va_arg(args, void*);
 	alloc->orphan |= (caller == alloc->caller) ? (1 << 1) : 0;
 	return 1;
 }
 
-void gc_collect_caller(void *caller) {
-	list_each_data(&gc_list_root, &gc_collect_caller_helper, caller);
+void gc_mark_caller(void *caller) {
+	list_each_data(&gc_list_root, &gc_mark_caller_helper, caller);
 	return;
 }
 
-int gc_collect_ref_helper(alloc_t *alloc, va_list args) {
+int gc_mark_ref_helper(alloc_t *alloc, va_list args) {
 	if(!alloc || !args) return 1;
 	ref_t ref = va_arg(args, ref_t);
 	alloc->orphan |= memcmp(&ref, &alloc->ref, sizeof(ref_t)) ? 0 : (1 << 2);
 	return 1;
 }
 
-void gc_collect_ref(ref_t ref) {
-	list_each_data(&gc_list_root, &gc_collect_ref_helper, ref);
+void gc_mark_ref(ref_t ref) {
+	list_each_data(&gc_list_root, &gc_mark_ref_helper, ref);
 	return;
 }
 
+int gc_mark_scope_helper(alloc_t *alloc, va_list args) {
+	alloc->orphan |= (
+!alloc->caller && !gc_blockcheck(&alloc->ref, sizeof(alloc->ref))
+	) ? (1 << 3) : 0;
+	return 1;
+}
+
 void gc_collect(void *caller, ref_t ref) {
-	if(ref.ptr || ref.rnd)
-		gc_collect_ref(ref);
-	if(caller)
-		gc_collect_caller(caller);
+	if(!caller && !gc_blockcheck(&ref, sizeof(ref))) {
+		list_each_data(&gc_list_root, &gc_mark_scope_helper);
+	} else {
+		if(gc_blockcheck(&ref, sizeof(ref)))
+			gc_mark_ref(ref);
+		if(caller)
+			gc_mark_caller(caller);
+	}
 	list_t *node = gc_list_root;
 	while(node && node->next != gc_list_root) {
 		alloc_t *alloc = (alloc_t*) node->data;
@@ -133,10 +152,34 @@ void gc_collect(void *caller, ref_t ref) {
 			gc_free_ptr(&alloc->ptr);
 			gc_free((alloc_t**) &orphan->data);
 			list_free_ptr((void**) &orphan);
-		} else printf("! ORPHAN: node:%p alloc:%p \n", node, alloc);
+		} //else printf("! ORPHAN: node:%p alloc:%p \n", node, alloc);
 		node = next;
 		continue;
 	}
+	return;
+}
+
+int gc_claim_caller_helper(alloc_t *alloc, va_list args) {
+	if(!alloc->caller && !gc_blockcheck(&alloc->ref, sizeof(alloc->ref))) {
+		alloc->caller = va_arg(args, void*);
+	}
+	return 1;
+}
+
+void gc_claim_caller(void *caller) {
+	list_each_data(&gc_list_root, &gc_claim_caller_helper, caller);
+	return;
+}
+
+int gc_claim_ref_helper(alloc_t *alloc, va_list args) {
+	if(!alloc->caller && !gc_blockcheck(&alloc->ref, sizeof(alloc->ref))) {
+		alloc->ref = va_arg(args, ref_t);
+	}
+	return 1;
+}
+
+void gc_claim_ref(ref_t ref) {
+	list_each_data(&gc_list_root, &gc_claim_ref_helper, ref);
 	return;
 }
 

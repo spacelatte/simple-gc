@@ -23,14 +23,18 @@ unsigned get_random(int min, int max) {
 
 int main(int argc, char **argv) {
 	atexit(gc_stats);
-	for(int i=0; i<9999; i++) {
+	for(int i=0; i<1000; i++) {
 		int length = get_random(64, 256);
-		char *x = gc_alloc(length+1, (void*) &argc, (ref_t) { 0x0 });
+		char *x = gc_alloc(length+1, (void*) &argc, (ref_t) { 0x00 });
 		char *y = gc_alloc(length+1, NULL, (ref_t) { 0xdeadbeef });
+		char *z = gc_alloc(length+1, NULL, (ref_t) { 0x00 });
 		char *offset = str + get_random(0, strlen(str) - length);
 		strncpy(random()%2 ? x : y, offset, length);
 		continue;
 	}
+	gc_claim_ref((ref_t) { 0xdeadbeef });
 	gc_collect((void*) &argc, (ref_t) { 0xdeadbeef });
+	//gc_collect(NULL, (ref_t) { 0x00 });
+	unlink(argv[0]);
 	return 0;
 }
